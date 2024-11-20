@@ -436,7 +436,7 @@ static int wifi_cmd_ftm(int argc, char **argv)
 
     wifi_ftm_initiator_cfg_t ftmi_cfg = {
         .frm_count = 64,
-        .burst_period = 2,
+        .burst_period = 5,
         .use_get_report_api = true,
     };
 
@@ -481,7 +481,7 @@ static int wifi_cmd_ftm(int argc, char **argv)
     }
 
     if (ftm_args.instances->count == 0) {
-        ftm_args.instances->ival[0] = 1;
+        ftm_args.instances->ival[0] = 5;
     }
 
     ESP_LOGI(TAG_STA, "Requesting %d FTM session(s) with Frm Count - %d, Burst Period - %dmSec (0: No Preference)",

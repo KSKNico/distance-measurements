@@ -1,0 +1,10 @@
+We did the measurements at varying distances with two ESP32 S3.
+ESP 1 was attached to the backside of the bicycle (under the seat)
+ESP 2 was fixed at a height of 1 meter.
+
+The bicycle was rotated 90 degress to ESP 2.
+
+At each distance 5 measurments were done (-i 5) with 64 FTM frames each (-c 64), equating to 64*5 frames (300 frames). The burst period was set to 5 (-p 5 [500ms]).
+
+The header of data files is as follows: 
+ID, Diag, RTT, T1, T2, T3, T4, RSSI, RTT_raw, RTT_est, Dist_est
