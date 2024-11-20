@@ -31,6 +31,7 @@ typedef struct {
 typedef struct {
     struct arg_int *frm_count;
     struct arg_int *burst_period;
+    struct arg_int *instances;
     struct arg_end *end;
 } wifi_ftm_args_t;
 
@@ -154,7 +155,7 @@ static void ftm_print_report(uint32_t id)
     }
 
     bzero(log, 200);
-    sprintf(log, "%s", "ID, Diag, RTT, T1, T2, T3, T4, RSSI, RTT_est, Dist_est");
+    sprintf(log, "%s", "ID, Diag, RTT, T1, T2, T3, T4, RSSI, RTT_raw, RTT_est, Dist_est");
     ESP_LOGI(TAG_STA, "%s", log);
     for (i = 0; i < s_ftm_report_num_entries; i++) {
         char *log_ptr = log;
@@ -170,8 +171,8 @@ static void ftm_print_report(uint32_t id)
         log_ptr += sprintf(log_ptr, "%14llu, %14llu, %14llu, %14llu, ", ftm_report[i].t1,
                                         ftm_report[i].t2, ftm_report[i].t3, ftm_report[i].t4);
         log_ptr += sprintf(log_ptr, "%6d, ", ftm_report[i].rssi);
-        log_ptr += sprintf(log_ptr, "%14lu, %14lu", s_rtt_est, s_dist_est);
-        ESP_LOGI(TAG_STA, "%s", log);
+        log_ptr += sprintf(log_ptr, "%14lu, %14lu, %14lu", s_rtt_raw, s_rtt_est, s_dist_est);
+        printf("%s\n", log);
     }
 
 exit:
@@ -434,7 +435,7 @@ static int wifi_cmd_ftm(int argc, char **argv)
     EventBits_t bits;
 
     wifi_ftm_initiator_cfg_t ftmi_cfg = {
-        .frm_count = 32,
+        .frm_count = 64,
         .burst_period = 2,
         .use_get_report_api = true,
     };
@@ -479,86 +480,42 @@ static int wifi_cmd_ftm(int argc, char **argv)
         }
     }
 
-    // ESP_LOGI(TAG_STA, "Requesting FTM session with Frm Count - %d, Burst Period - %dmSec (0: No Preference)",
-    //         ftmi_cfg.frm_count, ftmi_cfg.burst_period*100);
-
-    if (ESP_OK != esp_wifi_ftm_initiate_session(&ftmi_cfg)) {
-        ESP_LOGE(TAG_STA, "Failed to start FTM session");
-        return 0;
+    if (ftm_args.instances->count == 0) {
+        ftm_args.instances->ival[0] = 1;
     }
 
-    if (ftmi_cfg.burst_period) {
-        /* Wait at least double the duration of maximum FTM bursts */
-        wait_time_ms = (ftmi_cfg.burst_period * 100) * (MAX_FTM_BURSTS * 2);
-    }
-    bits = xEventGroupWaitBits(s_ftm_event_group, FTM_REPORT_BIT | FTM_FAILURE_BIT,
-                                           pdTRUE, pdFALSE, wait_time_ms / portTICK_PERIOD_MS);
-    if (bits & FTM_REPORT_BIT) {
-        /* Print detailed data from FTM session */
-        ftm_print_report(s_measurement_id);
-        ++s_measurement_id;
-        ESP_LOGI(TAG_STA, "Estimated RTT - %" PRId32 " nSec, Estimated Distance - %" PRId32 ".%02" PRId32 " meters",
-                          s_rtt_est, s_dist_est / 100, s_dist_est % 100);
-    } else if (bits & FTM_FAILURE_BIT) {
-        /* FTM Failure case */
-        ESP_LOGE(TAG_STA, "FTM procedure failed!");
-    } else {
-        /* Timeout, end session gracefully */
-        ESP_LOGE(TAG_STA, "FTM procedure timed out!");
-        esp_wifi_ftm_end_session();
-    }
+    ESP_LOGI(TAG_STA, "Requesting %d FTM session(s) with Frm Count - %d, Burst Period - %dmSec (0: No Preference)",
+             ftm_args.instances->ival[0], ftmi_cfg.frm_count, ftmi_cfg.burst_period*100);
 
-    return 0;
-/*
-ftm_responder:
-    if (ftm_args.offsnico@thinkpad-l13 ~/u/3/l/distance-measurements [1]> python distance.py 100m
-Executing action: monitor
-Serial port /dev/ttyACM0
-Connecting....
-Detecting chip type... ESP32-S3
-Running idf_monitor in directory /home/nico/uni/3/localization/distance-measurements
-Executing "/home/nico/.espressif/python_env/idf5.3_py3.12_env/bin/python /home/nico/esp/v5.3.1/esp-idf/tools/idf_monitor.py -p /dev/ttyACM0 -b 115200 --toolchain-prefix xtensa-esp32s3-elf- --target esp32s3 --revision 0 /home/nico/uni/3/localization/distance-measurements/build/distance-measurements.elf -m '/home/nico/.espressif/python_env/idf5.3_py3.12_env/bin/python' '/home/nico/esp/v5.3.1/esp-idf/tools/idf.py'"...
-Error: Monitor requires standard input to be attached to TTY. Try using a different terminal.
-idf_monitor failed with exit code 1, output of the command is in the /home/nico/uni/3/localization/distance-measurements/build/log/idf_py_stderr_output_31779 and /home/nico/uni/3/localization/distance-measurements/build/log/idf_py_stdout_output_31779
-Traceback (most recent call last):
-  File "/home/nico/uni/3/localization/distance-measurements/distance.py", line 33, in <module>
-    main()
-  File "/home/nico/uni/3/localization/distance-measurements/distance.py", line 29, in main
-    m = launch_measurement(args.name)
-        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/nico/uni/3/localization/distance-measurements/distance.py", line 22, in launch_measurement
-    return result.stdout.decode('utf-8')    
-           ^^^^^^^^^^^^^^^^^^^^
-AttributeError: 'NoneType' object has no attribute 'decode'et->count != 0) {
-        int16_t offset_cm = ftm_args.offset->ival[0];
+    for (int i = 0; i < ftm_args.instances->ival[0]; i++) {
 
-        esp_wifi_ftm_resp_set_offset(offset_cm);
-    }
-
-    if (ftm_args.enable->count != 0) {
-        if (!s_ap_started) {
-            ESP_LOGE(TAG_AP, "Start the SoftAP first with 'ap' command");
+        if (ESP_OK != esp_wifi_ftm_initiate_session(&ftmi_cfg)) {
+            ESP_LOGE(TAG_STA, "Failed to start FTM session");
             return 0;
         }
-        g_ap_config.ap.ftm_responder = true;
-        ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_AP, &g_ap_config));
-        ESP_LOGI(TAG_AP, "Re-starting SoftAP with FTM Responder enabled");
 
-        return 0;
-    }
-
-    if (ftm_args.disable->count != 0) {
-        if (!s_ap_started) {
-            ESP_LOGE(TAG_AP, "Start the SoftAP first with 'ap' command");
-            return 0;
+        if (ftmi_cfg.burst_period) {
+            /* Wait at least double the duration of maximum FTM bursts */
+            wait_time_ms = (ftmi_cfg.burst_period * 100) * (MAX_FTM_BURSTS * 2);
         }
-        g_ap_config.ap.ftm_responder = false;
-        ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_AP, &g_ap_config));
-        ESP_LOGI(TAG_AP, "Re-starting SoftAP with FTM Responder disabled");
+        bits = xEventGroupWaitBits(s_ftm_event_group, FTM_REPORT_BIT | FTM_FAILURE_BIT,
+                                            pdTRUE, pdFALSE, wait_time_ms / portTICK_PERIOD_MS);
+        if (bits & FTM_REPORT_BIT) {
+            /* Print detailed data from FTM session */
+            ftm_print_report(s_measurement_id);
+            ++s_measurement_id;
+            ESP_LOGI(TAG_STA, "Estimated RTT - %" PRId32 " nSec, Estimated Distance - %" PRId32 ".%02" PRId32 " meters",
+                            s_rtt_est, s_dist_est / 100, s_dist_est % 100);
+        } else if (bits & FTM_FAILURE_BIT) {
+            /* FTM Failure case */
+            ESP_LOGE(TAG_STA, "FTM procedure failed!");
+        } else {
+            /* Timeout, end session gracefully */
+            ESP_LOGE(TAG_STA, "FTM procedure timed out!");
+            esp_wifi_ftm_end_session();
+        }        
     }
-
     return 0;
-    */
 }
 
 void register_wifi(void)
@@ -588,6 +545,8 @@ void register_wifi(void)
 
     ftm_args.frm_count = arg_int0("c", "frm_count", "<0/8/16/24/32/64>", "FTM frames to be exchanged (0: No preference)");
     ftm_args.burst_period = arg_int0("p", "burst_period", "<0-100 (x 100 mSec)>", "Periodicity of FTM bursts in 100's of miliseconds (0: No preference)");
+    ftm_args.instances = arg_int0("i", "instances", "<1-255>", "Number of FTM instances to be run");
+    ftm_args.end = arg_end(1);
 
     const esp_console_cmd_t ftm_cmd = {
         .command = "ftm",
