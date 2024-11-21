@@ -62,22 +62,21 @@ def load_multiple_files(file_names: list):
 
 def plot_real_distance_vs_estimated_distance(data: pd.DataFrame):
     # plots the real distance vs the estimated distance
-    plt.scatter(data['Dist_true_cm'], data['Dist_calculated'])
+    plt.scatter(data['Dist_true_cm'], data['Dist_difference'])
     plt.xlabel('Real distance (cm)')
-    plt.ylabel('Estimated distance (cm)')
-    #graph should start at 0,0
-    plt.xlim(0, 3500)
-    plt.ylim(0, 6000)
+    plt.ylabel('Difference to real distance (cm)')
 
-    # set tick marks to be the same
-    plt.xticks(range(0, 3500, 500))
-    plt.yticks(range(0, 6000, 500))
+    plt.scatter(data['Dist_true_cm'], data['Dist_average'], color='red')
+    plt.scatter(data['Dist_true_cm'], data['Dist_median'], color='yellow')
 
     # x and y scaling should be the same
-    plt.gca().set_aspect('equal', adjustable='box')
+    # plt.gca().set_aspect('equal', adjustable='box')
 
     # plot the optimal line as well in red
-    plt.plot([0, 3000], [0, 3000], 'r')
+    # plt.plot([0, 3000], [0, 3000], 'r')
+
+    # plot horizontal line at 0
+    plt.axhline(0, color='black', lw=1)
     plt.show()
 
 
@@ -86,11 +85,21 @@ def calculate_distance_with_rtt(rtt: int) -> int:
 
 def add_distance_with_rtt(df: pd.DataFrame):
     df['Dist_calculated'] = df['RTT'].apply(func=calculate_distance_with_rtt)
+    df['Dist_difference'] = df['Dist_calculated'] - df['Dist_true_cm'] 
+
+def average_distance_difference(data: pd.DataFrame):
+    # group by real distance
+    # calculate the mean of the difference
+    averages_df = data.groupby('Dist_true_cm')['Dist_difference'].mean()
+    medians_df = data.groupby('Dist_true_cm')['Dist_difference'].median()
+    # expand the df again, so that the average distance is also a column
+    data['Dist_average'] = data['Dist_true_cm'].map(averages_df)
+    data['Dist_median'] = data['Dist_true_cm'].map(medians_df)
 
 def main():
     df = load_multiple_files(get_data_file_names('.out'))
     add_distance_with_rtt(df)
-    print(df.head(100))
+    average_distance_difference(df)
     plot_real_distance_vs_estimated_distance(df)
 
 
