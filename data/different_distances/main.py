@@ -62,7 +62,7 @@ def load_multiple_files(file_names: list):
 
 def plot_real_distance_vs_estimated_distance(data: pd.DataFrame):
     # plots the real distance vs the estimated distance
-    plt.scatter(data['Dist_true_cm'], data['Dist_difference'])
+    plt.scatter(data['Dist_true_cm'], data['Dist_difference'], color = 'blue', alpha=0.1)
     plt.xlabel('Real distance (cm)')
     plt.ylabel('Difference to real distance (cm)')
 
@@ -77,7 +77,32 @@ def plot_real_distance_vs_estimated_distance(data: pd.DataFrame):
 
     # plot horizontal line at 0
     plt.axhline(0, color='black', lw=1)
-    plt.show()
+    plt.legend(["Distances differences" , "Average distance differences", "Median distance differences"], ncol = 1 , loc = "upper left")
+
+    plt.savefig("real_vs_measured.png")
+    # plt.show()
+
+def plot_individual_distance_measurement(data: pd.DataFrame):
+    # plot a histogram
+    plt.figure(figsize=(10,6))
+    plt.title(str(data['Dist_true_cm'][0]) + " cm")
+    plt.xlabel('Measured distance (cm)')
+    plt.ylabel('Count in bucket')
+
+    # increase bin size
+    real_distance = data['Dist_true_cm'][0]
+    minimum_distance = data['Dist_calculated'].min()
+    maximum_distance = data['Dist_calculated'].max()
+    width = maximum_distance - minimum_distance 
+    plt.axvline(x=data['Dist_calculated'].mean(), color='red', linestyle='--')
+    plt.axvline(x=data['Dist_calculated'].median(), color='yellow', linestyle=':')
+    plt.axvline(x=real_distance, color='blue')
+    plt.grid()
+    
+
+    plt.hist(data['Dist_calculated'], bins=range(minimum_distance, maximum_distance + 20, 20), color='lightblue', edgecolor='black')
+    plt.savefig(str(real_distance) + "cm")
+
 
 
 def calculate_distance_with_rtt(rtt: int) -> int:
@@ -99,13 +124,18 @@ def average_distance_difference(data: pd.DataFrame):
 def main():
     df = load_multiple_files(get_data_file_names('.out'))
     add_distance_with_rtt(df)
+
+    # prints the overall graph that compares distances
     average_distance_difference(df)
     plot_real_distance_vs_estimated_distance(df)
 
-
-
-
-
+    # prints the indivdiual distances as a histogram
+    # go over each real distance
+    for dist in df['Dist_true_cm'].unique():
+        subset = df[df['Dist_true_cm'] == dist]
+        # sort
+        subset = subset.sort_values(by='Dist_true_cm')
+        plot_individual_distance_measurement(subset)
 
 if __name__ == '__main__':
     main()

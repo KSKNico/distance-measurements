@@ -1,6 +1,7 @@
-We did the measurements at varying distances with two ESP32 S3.
+We did the measurements at varying distances with two ESP32 S3 and GPS.
 ESP 1 was attached to the backside of the bicycle (under the seat)
 ESP 2 was fixed at a height of 1 meter.
+The GPS was simply attached to the bicycle.
 
 The bicycle was rotated 90 degress to ESP 2.
 
