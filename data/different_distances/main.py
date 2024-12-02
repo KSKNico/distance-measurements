@@ -102,7 +102,16 @@ def plot_individual_distance_measurement(data: pd.DataFrame):
 
     plt.hist(data['Dist_calculated'], bins=range(minimum_distance, maximum_distance + 20, 20), color='lightblue', edgecolor='black')
     plt.savefig(str(real_distance) + "cm")
+    plt.cla()
 
+
+def plot_ecdf_distance_measurement(subset):
+    plt.cla()
+    real_distance = subset['Dist_true_cm'][0]
+    plt.ecdf(x=subset['Dist_calculated'])
+
+    plt.savefig("ecdf_" + str(real_distance) + "cm")
+    plt.cla()
 
 
 def calculate_distance_with_rtt(rtt: int) -> int:
@@ -136,6 +145,7 @@ def main():
         # sort
         subset = subset.sort_values(by='Dist_true_cm')
         plot_individual_distance_measurement(subset)
+        plot_ecdf_distance_measurement(subset)
 
 if __name__ == '__main__':
     main()

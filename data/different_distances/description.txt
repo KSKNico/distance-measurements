@@ -9,3 +9,15 @@ At each distance 5 measurments were done (-i 5) with 64 FTM frames each (-c 64),
 
 The header of data files is as follows: 
 ID, Diag, RTT, T1, T2, T3, T4, RSSI, RTT_raw, RTT_est, Dist_est
+
+
+TODO:
+- ECDF
+- Sort by order/time
+- antenna diagram
+- gps data inserted
+- closer to wall/objects
+- another experiment (get the same data)
+- other gps modes (Windows VM)
+- behind wall (unlikely, just once)
+- moving bicycle (no too important)
