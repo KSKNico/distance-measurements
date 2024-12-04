@@ -2,12 +2,14 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import re
 import os
+import argparse
 
 MEASUREMENT_HEADER = ["ID", "Diag", "RTT", "T1", "T2", "T3", "T4", "RSSI", "RTT_raw", "RTT_est", "Dist_est"]
 SPEED_OF_LIGHT_METERS_PER_SECOND: float = 299_792_458 # m/s
+path_to_data = ""
 
 def get_data_file_names(ending: str) -> list:
-    return [f for f in os.listdir() if f.endswith(ending)]
+    return [f for f in os.listdir(path_to_data) if f.endswith(ending)]
 
 def clean_input(input_data: str) -> str:
     clean_output = []
@@ -20,7 +22,7 @@ def clean_input(input_data: str) -> str:
     return '\n'.join(clean_output)
 
 def load_file_content(file_path: str) -> str:
-    with open(file_path, 'r') as file:
+    with open(os.path.join(path_to_data, file_path), 'r') as file:
         return file.read()
 
 # loads the file and removes all unnecessary lines that don't containt data
@@ -79,8 +81,9 @@ def plot_real_distance_vs_estimated_distance(data: pd.DataFrame):
     plt.axhline(0, color='black', lw=1)
     plt.legend(["Distances differences" , "Average distance differences", "Median distance differences"], ncol = 1 , loc = "upper left")
 
-    plt.savefig("real_vs_measured.png")
+    plt.savefig(os.path.join(path_to_data, "graphs", "real_vs_measured.png"))
     # plt.show()
+    plt.close()
 
 def plot_individual_distance_measurement(data: pd.DataFrame):
     # plot a histogram
@@ -101,17 +104,16 @@ def plot_individual_distance_measurement(data: pd.DataFrame):
     
 
     plt.hist(data['Dist_calculated'], bins=range(minimum_distance, maximum_distance + 20, 20), color='lightblue', edgecolor='black')
-    plt.savefig(str(real_distance) + "cm")
-    plt.cla()
+    plt.savefig(os.path.join(path_to_data, "graphs", str(real_distance) + "cm"))
+    plt.close()
 
 
 def plot_ecdf_distance_measurement(subset):
-    plt.cla()
     real_distance = subset['Dist_true_cm'][0]
     plt.ecdf(x=subset['Dist_calculated'])
 
-    plt.savefig("ecdf_" + str(real_distance) + "cm")
-    plt.cla()
+    plt.savefig(os.path.join(path_to_data, "graphs", "ecdf_" + str(real_distance) + "cm"))
+    plt.close()
 
 
 def calculate_distance_with_rtt(rtt: int) -> int:
@@ -131,6 +133,16 @@ def average_distance_difference(data: pd.DataFrame):
     data['Dist_median'] = data['Dist_true_cm'].map(medians_df)
 
 def main():
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument("dirname", help="Directory name for the data files")
+
+    args = parser.parse_args()
+
+    global path_to_data
+    path_to_data = args.dirname
+
+
     df = load_multiple_files(get_data_file_names('.out'))
     add_distance_with_rtt(df)
 

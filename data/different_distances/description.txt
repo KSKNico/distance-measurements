@@ -14,8 +14,8 @@ ID, Diag, RTT, T1, T2, T3, T4, RSSI, RTT_raw, RTT_est, Dist_est
 TODO:
 - ECDF
 - Sort by order/time
-- antenna diagram
-- gps data inserted
+- antenna diagram (walk around a bike, 30 degrees)
+- gps data inserted (?)
 - closer to wall/objects
 - another experiment (get the same data)
 - other gps modes (Windows VM)

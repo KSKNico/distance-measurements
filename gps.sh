@@ -1,0 +1,1 @@
+gnssdump -P /dev/ttyACM0 | tee $1
