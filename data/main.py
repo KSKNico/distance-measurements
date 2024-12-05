@@ -3,9 +3,12 @@ import matplotlib.pyplot as plt
 import re
 import os
 import argparse
+import numpy as np
 
 MEASUREMENT_HEADER = ["ID", "Diag", "RTT", "T1", "T2", "T3", "T4", "RSSI", "RTT_raw", "RTT_est", "Dist_est"]
 SPEED_OF_LIGHT_METERS_PER_SECOND: float = 299_792_458 # m/s
+ROTATION_TEST_TRUE_DISTANCE_CM = 500
+ROTATION_FRONTAL_ANGLE_DEGREES = 277 # in degrees; depends on the used angle for the experiment
 path_to_data = ""
 
 def get_data_file_names(ending: str) -> list:
@@ -47,16 +50,25 @@ def check_data(data: pd.DataFrame):
     assert (data["RTT"] ==  (data["T4"] - data["T1"]) - (data["T3"] - data["T2"])).all()
 
 
-def plot_data(data: pd.DataFrame):
-    # plots
-    pass
-
-def load_multiple_files(file_names: list):
+def load_multiple_files(file_names: list, plot_type: str):
     file_contents = [load_and_clean_file(file_name) for file_name in file_names]
     dfs = [convert_to_dataframe(file_content) for file_content in file_contents]
-    for df, name in zip(dfs, file_names):
-        df['Dist_true_cm'] = int(''.join(name[0:2]))*100
-        check_data(df)
+
+    if plot_type == "d":
+        for df, name in zip(dfs, file_names):
+            df['Dist_true_cm'] = int(''.join(name[0:2]))*100
+            check_data(df)
+    
+    # this adds the angle instead of the true distance
+    elif plot_type == "r":
+        for df, name in zip(dfs, file_names):
+            normalized_angle = int(''.join(name[0:3])) - ROTATION_FRONTAL_ANGLE_DEGREES
+            if normalized_angle < 0:
+                normalized_angle += 360
+
+            df['Angle'] = normalized_angle
+            df['Dist_true_cm'] = ROTATION_TEST_TRUE_DISTANCE_CM
+            check_data(df)
     
     combined_df = pd.concat(dfs)
     return combined_df
@@ -108,13 +120,27 @@ def plot_individual_distance_measurement(data: pd.DataFrame):
     plt.close()
 
 
-def plot_ecdf_distance_measurement(subset):
-    real_distance = subset['Dist_true_cm'][0]
-    plt.ecdf(x=subset['Dist_calculated'])
+def plot_ecdf_distance_measurement(df):
+    real_distance = df['Dist_true_cm'][0]
+    plt.ecdf(x=df['Dist_calculated'])
+
+    plt.title("ECDF Graph for " + str(real_distance) + " cm")
+    plt.axvline(real_distance, color="red", linestyle="-")
+
+    plt.xlabel("Distance in cm")
+    plt.ylabel("Distribution of values")
 
     plt.savefig(os.path.join(path_to_data, "graphs", "ecdf_" + str(real_distance) + "cm"))
     plt.close()
 
+def plot_time_graph(df: pd.DataFrame):
+    real_distance = df['Dist_true_cm'][0]
+    plt.scatter(df["T1"], df["Dist_calculated"], alpha=0.3)
+    plt.title("Time diagram for " + str(real_distance) + " cm")
+    plt.xlabel("Time of the measurement (T1) [picoseconds]")
+    plt.ylabel("Distance [cm]")
+    plt.savefig(os.path.join(path_to_data, "graphs", "time_" + str(real_distance) + "cm"))
+    plt.close()
 
 def calculate_distance_with_rtt(rtt: int) -> int:
     return int(rtt * SPEED_OF_LIGHT_METERS_PER_SECOND * 100 / 1e+12 / 2)
@@ -132,32 +158,58 @@ def average_distance_difference(data: pd.DataFrame):
     data['Dist_average'] = data['Dist_true_cm'].map(averages_df)
     data['Dist_median'] = data['Dist_true_cm'].map(medians_df)
 
+def plot_radial_graph(df: pd.DataFrame):
+    real_distance = df['Dist_true_cm'][0]
+    plt.title("Sensor attached to the saddle - top down view - bicycle faces north (0°)")
+    plt.figure()
+    reduced_df = df.drop_duplicates('Angle')
+
+    # convert to radians
+    reduced_df['Angle'] = np.radians(reduced_df['Angle'])
+
+    fig, ax = plt.subplots(subplot_kw={'projection': 'polar'})
+    ax.scatter(reduced_df['Angle'], reduced_df['Dist_average'], c='blue', label="Data Points")
+    plt.savefig(os.path.join(path_to_data, "graphs", "radial_" + str(real_distance) + "cm"))
+    plt.close()
+
+
 def main():
     parser = argparse.ArgumentParser()
 
+    parser.add_argument("plot_type", help="Choose between distance plots (d) or antenna plot (r)")
     parser.add_argument("dirname", help="Directory name for the data files")
 
     args = parser.parse_args()
 
     global path_to_data
-    path_to_data = args.dirname
+
+    if args.plot_type == "d":
+            path_to_data = os.path.join(path_to_data, "different_distances")
+    elif args.plot_type == "r":
+            path_to_data = os.path.join(path_to_data, "different_angles_saddle")
+
+    path_to_data = os.path.join(path_to_data, args.dirname)
 
 
-    df = load_multiple_files(get_data_file_names('.out'))
+    df = load_multiple_files(get_data_file_names('.out'), args.plot_type)
     add_distance_with_rtt(df)
-
-    # prints the overall graph that compares distances
     average_distance_difference(df)
-    plot_real_distance_vs_estimated_distance(df)
 
-    # prints the indivdiual distances as a histogram
-    # go over each real distance
-    for dist in df['Dist_true_cm'].unique():
-        subset = df[df['Dist_true_cm'] == dist]
-        # sort
-        subset = subset.sort_values(by='Dist_true_cm')
-        plot_individual_distance_measurement(subset)
-        plot_ecdf_distance_measurement(subset)
+    if args.plot_type == "d":
+        # prints the overall graph that compares distances
+        plot_real_distance_vs_estimated_distance(df)
+
+        # prints the indivdiual distances as a histogram
+        # go over each real distance
+        for dist in df['Dist_true_cm'].unique():
+            subset = df[df['Dist_true_cm'] == dist]
+            # sort
+            subset = subset.sort_values(by='Dist_true_cm')
+            plot_individual_distance_measurement(subset)
+            plot_ecdf_distance_measurement(subset)
+            plot_time_graph(subset)
+    elif args.plot_type == "r":
+        plot_radial_graph(df)
 
 if __name__ == '__main__':
     main()
