@@ -4,12 +4,20 @@ import re
 import os
 import argparse
 import numpy as np
+from PIL import Image
 
 MEASUREMENT_HEADER = ["ID", "Diag", "RTT", "T1", "T2", "T3", "T4", "RSSI", "RTT_raw", "RTT_est", "Dist_est"]
 SPEED_OF_LIGHT_METERS_PER_SECOND: float = 299_792_458 # m/s
 ROTATION_TEST_TRUE_DISTANCE_CM = 500
 ROTATION_FRONTAL_ANGLE_DEGREES = 277 # in degrees; depends on the used angle for the experiment
+BICYCLE_IMAGE_NAME = "bicycle.png"
 path_to_data = ""
+
+# Open an image from a computer 
+def open_image_local(path_to_image):
+    image = Image.open(path_to_image) # Open the image
+    image_array = np.array(image) # Convert to a numpy array
+    return image_array # Output
 
 def get_data_file_names(ending: str) -> list:
     return [f for f in os.listdir(path_to_data) if f.endswith(ending)]
@@ -80,8 +88,8 @@ def plot_real_distance_vs_estimated_distance(data: pd.DataFrame):
     plt.xlabel('Real distance (cm)')
     plt.ylabel('Difference to real distance (cm)')
 
-    plt.scatter(data['Dist_true_cm'], data['Dist_average'], color='red')
-    plt.scatter(data['Dist_true_cm'], data['Dist_median'], color='yellow')
+    plt.scatter(data['Dist_true_cm'], data['Dist_difference_average'], color='red')
+    plt.scatter(data['Dist_true_cm'], data['Dist_difference_median'], color='yellow')
 
     # x and y scaling should be the same
     # plt.gca().set_aspect('equal', adjustable='box')
@@ -119,7 +127,6 @@ def plot_individual_distance_measurement(data: pd.DataFrame):
     plt.savefig(os.path.join(path_to_data, "graphs", str(real_distance) + "cm"))
     plt.close()
 
-
 def plot_ecdf_distance_measurement(df):
     real_distance = df['Dist_true_cm'][0]
     plt.ecdf(x=df['Dist_calculated'])
@@ -135,9 +142,12 @@ def plot_ecdf_distance_measurement(df):
 
 def plot_time_graph(df: pd.DataFrame):
     real_distance = df['Dist_true_cm'][0]
-    plt.scatter(df["T1"], df["Dist_calculated"], alpha=0.3)
+    # convert T1 in picoseconds to seconds and add a column to the dataframe as timestamp
+    df['T1_s'] = df['T1'] / 1e+12
+
+    plt.scatter(df["T1_s"], df["Dist_calculated"], alpha=0.3)
     plt.title("Time diagram for " + str(real_distance) + " cm")
-    plt.xlabel("Time of the measurement (T1) [picoseconds]")
+    plt.xlabel("Time of the measurement (T1) [seconds]")
     plt.ylabel("Distance [cm]")
     plt.savefig(os.path.join(path_to_data, "graphs", "time_" + str(real_distance) + "cm"))
     plt.close()
@@ -152,24 +162,124 @@ def add_distance_with_rtt(df: pd.DataFrame):
 def average_distance_difference(data: pd.DataFrame):
     # group by real distance
     # calculate the mean of the difference
-    averages_df = data.groupby('Dist_true_cm')['Dist_difference'].mean()
-    medians_df = data.groupby('Dist_true_cm')['Dist_difference'].median()
+    average_difference_df = data.groupby('Dist_true_cm')['Dist_difference'].mean()
+    median_difference_df = data.groupby('Dist_true_cm')['Dist_difference'].median()
     # expand the df again, so that the average distance is also a column
-    data['Dist_average'] = data['Dist_true_cm'].map(averages_df)
-    data['Dist_median'] = data['Dist_true_cm'].map(medians_df)
+    data['Dist_difference_average'] = data['Dist_true_cm'].map(average_difference_df)
+    data['Dist_difference_median'] = data['Dist_true_cm'].map(median_difference_df)
 
-def plot_radial_graph(df: pd.DataFrame):
-    real_distance = df['Dist_true_cm'][0]
-    plt.title("Sensor attached to the saddle - top down view - bicycle faces north (0°)")
-    plt.figure()
-    reduced_df = df.drop_duplicates('Angle')
+
+    if 'Angle' in data.columns:
+        average_df = data.groupby('Angle')['Dist_calculated'].mean()
+        median_df = data.groupby('Angle')['Dist_calculated'].median()
+        data['Dist_average'] = data['Angle'].map(average_df)
+        data['Dist_median'] = data['Angle'].map(median_df)
+
+def rssi_calculations(df: pd.DataFrame):
+    # group by angle and calculate the average RSSI
+    average_rssi_df = df.groupby('Angle')['RSSI'].mean()
+    median_rssi_df = df.groupby('Angle')['RSSI'].median()
+
+    # expand the df again, so that the average/mean RSSI is also a column
+    df['RSSI_average'] = df['Angle'].map(average_rssi_df)
+    df['RSSI_median'] = df['Angle'].map(median_rssi_df)
+
+def plot_radial_graph_with_distances(df: pd.DataFrame):
+    real_distance: int = df['Dist_true_cm'].iloc[0]
+    # reduced_df = df.drop_duplicates('Angle').copy()
+
+    print(df[df['Angle'] == 270]['RSSI'])
 
     # convert to radians
-    reduced_df['Angle'] = np.radians(reduced_df['Angle'])
+    df.loc[:, 'Angle_radians'] = np.radians(df['Angle'])
 
     fig, ax = plt.subplots(subplot_kw={'projection': 'polar'})
-    ax.scatter(reduced_df['Angle'], reduced_df['Dist_average'], c='blue', label="Data Points")
-    plt.savefig(os.path.join(path_to_data, "graphs", "radial_" + str(real_distance) + "cm"))
+
+    # increase the size of the plot
+    fig.set_size_inches(10, 10)
+    
+    # Achseneinteilung auf 0 in die Mitte
+    # limit the radius
+    ax.set_ylim(0, 1000)
+
+    # draw a circle with the real distance
+    angles = np.linspace(0, 2*np.pi, 100)
+    radii = np.full(100, real_distance)
+
+    ax.plot(angles, radii, color='green', linestyle='--')
+
+    # make 0 degrees at the top
+    ax.set_theta_offset(np.pi/2)    
+
+    ax.scatter(df['Angle_radians'], df['Dist_calculated'], c='blue', label="Measured distance", alpha=0.1)
+    ax.scatter(df['Angle_radians'], df['Dist_average'], c='red', label="Average")
+    ax.scatter(df['Angle_radians'], df['Dist_median'], c='yellow', label="Median")
+
+    # add meter suffix to the radius
+    # ax.set_yticklabels([str(i) + " m" for i in range(0, 11, 1)])
+
+    plt.legend(["Real Distance", "Distances" , "Average distance", "Median distance"], ncol = 1 , loc = "upper left")
+    plt.title("Measured distances for " + str(real_distance/100) + " m")
+
+    # the image should be in the middle of the radial plot
+    image_xaxis = 0.465
+    image_yaxis = 0.465
+    image = open_image_local(BICYCLE_IMAGE_NAME)
+
+    # rotate the image
+    image = np.rot90(image, k=1)
+
+    ax_image = fig.add_axes([image_xaxis, image_yaxis, 0.1, 0.1])
+    ax_image.imshow(image)
+    ax_image.axis('off') 
+
+    fig.savefig(os.path.join(path_to_data, "graphs", "radial_" + str(real_distance) + "cm"))
+    plt.close()
+
+
+def plot_radial_graph_with_rssi(df: pd.DataFrame):
+    real_distance: int = df['Dist_true_cm'].iloc[0]
+
+
+    # convert to radians
+    df.loc[:, 'Angle_radians'] = np.radians(df['Angle'])
+
+    fig, ax = plt.subplots(subplot_kw={'projection': 'polar'})
+
+    # label the radius as RSSI
+    ax.set_ylabel('RSSI')
+     
+
+    # increase the size of the plot
+    fig.set_size_inches(10, 10)
+
+    # make 0 degrees at the top
+    ax.set_theta_offset(np.pi/2)
+
+
+    ax.scatter(df['Angle_radians'], df['RSSI'], c='blue', label="Measured RSSI", alpha=0.1)
+    ax.scatter(df['Angle_radians'], df['RSSI_average'], c='red', label="Average RSSI")
+    ax.scatter(df['Angle_radians'], df['RSSI_median'], c='yellow', label="Median RSSI")
+
+    # plot a line that goes through all median values
+    # ax.plot(df['Angle_radians'], df['RSSI_median'], c='yellow', linestyle='--')
+
+    plt.legend(["RSSI" , "Average RSSI", "Median RSSI"], ncol = 1 , loc = "upper left")
+    plt.title("RSSI values for " + str(real_distance//100) + " m")
+
+    # the image should be in the middle of the radial plot
+    image_xaxis = 0.465
+    image_yaxis = 0.465
+    image = open_image_local(BICYCLE_IMAGE_NAME)
+
+    # rotate the image
+    image = np.rot90(image, k=1)
+
+    ax_image = fig.add_axes([image_xaxis, image_yaxis, 0.1, 0.1])
+    ax_image.imshow(image)
+    ax_image.axis('off') 
+
+    fig.savefig(os.path.join(path_to_data, "graphs", "radial_rssi"))
     plt.close()
 
 
@@ -209,7 +319,9 @@ def main():
             plot_ecdf_distance_measurement(subset)
             plot_time_graph(subset)
     elif args.plot_type == "r":
-        plot_radial_graph(df)
+        rssi_calculations(df)
+        plot_radial_graph_with_distances(df)
+        plot_radial_graph_with_rssi(df)
 
 if __name__ == '__main__':
     main()
