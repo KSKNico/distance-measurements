@@ -5,6 +5,7 @@ import os
 import argparse
 import numpy as np
 from PIL import Image
+import geopy.distance
 
 MEASUREMENT_HEADER = ["ID", "Diag", "RTT", "T1", "T2", "T3", "T4", "RSSI", "RTT_raw", "RTT_est", "Dist_est"]
 SPEED_OF_LIGHT_METERS_PER_SECOND: float = 299_792_458 # m/s
@@ -91,6 +92,10 @@ def plot_real_distance_vs_estimated_distance(data: pd.DataFrame):
     plt.scatter(data['Dist_true_cm'], data['Dist_difference_average'], color='red')
     plt.scatter(data['Dist_true_cm'], data['Dist_difference_median'], color='yellow')
 
+    # add gps data if available
+    if 'GPS_distance' in data.columns:
+        plt.scatter(data['Dist_true_cm'], data['GPS_distance_difference'], color='green')
+
     # x and y scaling should be the same
     # plt.gca().set_aspect('equal', adjustable='box')
 
@@ -101,19 +106,23 @@ def plot_real_distance_vs_estimated_distance(data: pd.DataFrame):
     plt.axhline(0, color='black', lw=1)
     plt.legend(["Distances differences" , "Average distance differences", "Median distance differences"], ncol = 1 , loc = "upper left")
 
-    plt.savefig(os.path.join(path_to_data, "graphs", "real_vs_measured.png"))
+    plt.savefig(os.path.join(path_to_data, "graphs", "real_vs_measured.pdf"))
     # plt.show()
     plt.close()
 
 def plot_individual_distance_measurement(data: pd.DataFrame):
     # plot a histogram
+    print(data.head())
+    print(data.columns)
     plt.figure(figsize=(10,6))
-    plt.title(str(data['Dist_true_cm'][0]) + " cm")
+    real_distance = data['Dist_true_cm'][0]
+
+    plt.title(str(real_distance) + " cm")
     plt.xlabel('Measured distance (cm)')
     plt.ylabel('Count in bucket')
 
     # increase bin size
-    real_distance = data['Dist_true_cm'][0]
+
     minimum_distance = data['Dist_calculated'].min()
     maximum_distance = data['Dist_calculated'].max()
     width = maximum_distance - minimum_distance 
@@ -124,7 +133,7 @@ def plot_individual_distance_measurement(data: pd.DataFrame):
     
 
     plt.hist(data['Dist_calculated'], bins=range(minimum_distance, maximum_distance + 20, 20), color='lightblue', edgecolor='black')
-    plt.savefig(os.path.join(path_to_data, "graphs", str(real_distance) + "cm"))
+    plt.savefig(os.path.join(path_to_data, "graphs", str(real_distance) + "cm.pdf"))
     plt.close()
 
 def plot_ecdf_distance_measurement(df):
@@ -137,7 +146,7 @@ def plot_ecdf_distance_measurement(df):
     plt.xlabel("Distance in cm")
     plt.ylabel("Distribution of values")
 
-    plt.savefig(os.path.join(path_to_data, "graphs", "ecdf_" + str(real_distance) + "cm"))
+    plt.savefig(os.path.join(path_to_data, "graphs", "ecdf_" + str(real_distance) + "cm.pdf"))
     plt.close()
 
 def plot_time_graph(df: pd.DataFrame):
@@ -149,7 +158,7 @@ def plot_time_graph(df: pd.DataFrame):
     plt.title("Time diagram for " + str(real_distance) + " cm")
     plt.xlabel("Time of the measurement (T1) [seconds]")
     plt.ylabel("Distance [cm]")
-    plt.savefig(os.path.join(path_to_data, "graphs", "time_" + str(real_distance) + "cm"))
+    plt.savefig(os.path.join(path_to_data, "graphs", "time_" + str(real_distance) + "cm.pdf"))
     plt.close()
 
 def calculate_distance_with_rtt(rtt: int) -> int:
@@ -195,6 +204,7 @@ def plot_radial_graph_with_distances(df: pd.DataFrame):
 
     fig, ax = plt.subplots(subplot_kw={'projection': 'polar'})
 
+
     # increase the size of the plot
     fig.set_size_inches(10, 10)
     
@@ -233,7 +243,7 @@ def plot_radial_graph_with_distances(df: pd.DataFrame):
     ax_image.imshow(image)
     ax_image.axis('off') 
 
-    fig.savefig(os.path.join(path_to_data, "graphs", "radial_" + str(real_distance) + "cm"))
+    fig.savefig(os.path.join(path_to_data, "graphs", "radial_" + str(real_distance) + "cm.pdf"))
     plt.close()
 
 
@@ -279,14 +289,25 @@ def plot_radial_graph_with_rssi(df: pd.DataFrame):
     ax_image.imshow(image)
     ax_image.axis('off') 
 
-    fig.savefig(os.path.join(path_to_data, "graphs", "radial_rssi"))
+    fig.savefig(os.path.join(path_to_data, "graphs", "radial_rssi.pdf"))
     plt.close()
 
+def load_gps_data(file_path: str, df: pd.DataFrame) -> pd.DataFrame:
+    # the gps data is a csv file with two columns
+    # first column is the real distance in meters, second column is the measured distance in meters
+    gps_data = pd.read_csv(file_path, names=['Dist_true_cm', 'GPS_distance'])
+    gps_data['GPS_distance_difference'] = gps_data['Dist_true_cm'] - gps_data['GPS_distance']
+    # merge the gps data with the existing data
+    df = pd.merge(df, gps_data, on='Dist_true_cm', how='left')
+    print(df.columns)
+    print(df.head())
+    return df
+    
 
 def main():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("plot_type", help="Choose between distance plots (d) or antenna plot (r)")
+    parser.add_dargument("plot_type", help="Choose between distance plots (d) or antenna plot (r)")
     parser.add_argument("dirname", help="Directory name for the data files")
 
     args = parser.parse_args()
@@ -306,6 +327,10 @@ def main():
     average_distance_difference(df)
 
     if args.plot_type == "d":
+        if 'gps.pre' in os.listdir(path_to_data):
+            print("loading gps data")
+            df = load_gps_data(os.path.join(path_to_data, "gps.pre"), df)
+
         # prints the overall graph that compares distances
         plot_real_distance_vs_estimated_distance(df)
 
