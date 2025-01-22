@@ -2,6 +2,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import re
 import os
+from pyubx2 import UBXReader
+
 import argparse
 import numpy as np
 from PIL import Image
@@ -63,7 +65,7 @@ def load_multiple_files(file_names: list, plot_type: str):
     file_contents = [load_and_clean_file(file_name) for file_name in file_names]
     dfs = [convert_to_dataframe(file_content) for file_content in file_contents]
 
-    if plot_type == "d":
+    if plot_type == "d" or plot_type == "dg":
         for df, name in zip(dfs, file_names):
             df['Dist_true_cm'] = int(''.join(name[0:2]))*100
             check_data(df)
@@ -78,6 +80,7 @@ def load_multiple_files(file_names: list, plot_type: str):
             df['Angle'] = normalized_angle
             df['Dist_true_cm'] = ROTATION_TEST_TRUE_DISTANCE_CM
             check_data(df)
+
     
     combined_df = pd.concat(dfs)
     return combined_df
@@ -85,16 +88,12 @@ def load_multiple_files(file_names: list, plot_type: str):
 
 def plot_real_distance_vs_estimated_distance(data: pd.DataFrame):
     # plots the real distance vs the estimated distance
-    plt.scatter(data['Dist_true_cm'], data['Dist_difference'], color = 'blue', alpha=0.1)
-    plt.xlabel('Real distance (cm)')
-    plt.ylabel('Difference to real distance (cm)')
+    plt.scatter(data['Dist_true_cm']/100, data['Dist_difference']/100, color = 'blue', alpha=0.1)
+    plt.xlabel('Real distance (m)')
+    plt.ylabel('Difference to real distance (m)')
 
-    plt.scatter(data['Dist_true_cm'], data['Dist_difference_average'], color='red')
-    plt.scatter(data['Dist_true_cm'], data['Dist_difference_median'], color='yellow')
-
-    # add gps data if available
-    if 'GPS_distance' in data.columns:
-        plt.scatter(data['Dist_true_cm'], data['GPS_distance_difference'], color='green')
+    plt.scatter(data['Dist_true_cm']/100, data['Dist_difference_average']/100, color='red')
+    plt.scatter(data['Dist_true_cm']/100, data['Dist_difference_median']/100, color='yellow')
 
     # x and y scaling should be the same
     # plt.gca().set_aspect('equal', adjustable='box')
@@ -112,53 +111,51 @@ def plot_real_distance_vs_estimated_distance(data: pd.DataFrame):
 
 def plot_individual_distance_measurement(data: pd.DataFrame):
     # plot a histogram
-    print(data.head())
-    print(data.columns)
     plt.figure(figsize=(10,6))
-    real_distance = data['Dist_true_cm'][0]
+    real_distance = data['Dist_true_cm'][0]//100
 
-    plt.title(str(real_distance) + " cm")
-    plt.xlabel('Measured distance (cm)')
+    plt.title(str(real_distance) + " m")
+    plt.xlabel('Measured distance (m)')
     plt.ylabel('Count in bucket')
 
     # increase bin size
 
-    minimum_distance = data['Dist_calculated'].min()
-    maximum_distance = data['Dist_calculated'].max()
+    minimum_distance = data['Dist_calculated'].min()//100
+    maximum_distance = data['Dist_calculated'].max()//100
     width = maximum_distance - minimum_distance 
-    plt.axvline(x=data['Dist_calculated'].mean(), color='red', linestyle='--')
-    plt.axvline(x=data['Dist_calculated'].median(), color='yellow', linestyle=':')
+    plt.axvline(x=data['Dist_calculated'].mean()/100, color='red', linestyle='--')
+    plt.axvline(x=data['Dist_calculated'].median()/100, color='yellow', linestyle=':')
     plt.axvline(x=real_distance, color='blue')
     plt.grid()
     
 
-    plt.hist(data['Dist_calculated'], bins=range(minimum_distance, maximum_distance + 20, 20), color='lightblue', edgecolor='black')
-    plt.savefig(os.path.join(path_to_data, "graphs", str(real_distance) + "cm.pdf"))
+    plt.hist(data['Dist_calculated']/100, bins=range(minimum_distance, maximum_distance + 1, 1), color='lightblue', edgecolor='black')
+    plt.savefig(os.path.join(path_to_data, "graphs", str(real_distance) + "m.pdf"))
     plt.close()
 
 def plot_ecdf_distance_measurement(df):
-    real_distance = df['Dist_true_cm'][0]
-    plt.ecdf(x=df['Dist_calculated'])
+    real_distance = df['Dist_true_cm'][0]//100
+    plt.ecdf(x=df['Dist_calculated']/100)
 
-    plt.title("ECDF Graph for " + str(real_distance) + " cm")
+    plt.title("ECDF Graph for " + str(real_distance) + " m")
     plt.axvline(real_distance, color="red", linestyle="-")
 
-    plt.xlabel("Distance in cm")
+    plt.xlabel("Distance [m]")
     plt.ylabel("Distribution of values")
 
-    plt.savefig(os.path.join(path_to_data, "graphs", "ecdf_" + str(real_distance) + "cm.pdf"))
+    plt.savefig(os.path.join(path_to_data, "graphs", "ecdf_" + str(real_distance) + "m.pdf"))
     plt.close()
 
 def plot_time_graph(df: pd.DataFrame):
-    real_distance = df['Dist_true_cm'][0]
+    real_distance = df['Dist_true_cm'][0]//100
     # convert T1 in picoseconds to seconds and add a column to the dataframe as timestamp
     df['T1_s'] = df['T1'] / 1e+12
 
-    plt.scatter(df["T1_s"], df["Dist_calculated"], alpha=0.3)
-    plt.title("Time diagram for " + str(real_distance) + " cm")
+    plt.scatter(df["T1_s"], df["Dist_calculated"]/100, alpha=0.3)
+    plt.title("Time diagram for " + str(real_distance) + " m")
     plt.xlabel("Time of the measurement (T1) [seconds]")
-    plt.ylabel("Distance [cm]")
-    plt.savefig(os.path.join(path_to_data, "graphs", "time_" + str(real_distance) + "cm.pdf"))
+    plt.ylabel("Distance [m]")
+    plt.savefig(os.path.join(path_to_data, "graphs", "time_" + str(real_distance) + "m.pdf"))
     plt.close()
 
 def calculate_distance_with_rtt(rtt: int) -> int:
@@ -292,6 +289,7 @@ def plot_radial_graph_with_rssi(df: pd.DataFrame):
     fig.savefig(os.path.join(path_to_data, "graphs", "radial_rssi.pdf"))
     plt.close()
 
+"""
 def load_gps_data(file_path: str, df: pd.DataFrame) -> pd.DataFrame:
     # the gps data is a csv file with two columns
     # first column is the real distance in meters, second column is the measured distance in meters
@@ -302,12 +300,118 @@ def load_gps_data(file_path: str, df: pd.DataFrame) -> pd.DataFrame:
     print(df.columns)
     print(df.head())
     return df
-    
+"""
+
+# this only looks at GNGGA messages
+def convert_ubx_to_data(dir) -> pd.DataFrame:
+    # UBX files are basically CSV already
+    #GNGGA,['160345.00', '5101.74467', 'N', '01345.09246', 'E', '2', '12', '0.78', '134.6', 'M', '43.7', 'M', '', '0000']
+    # Define the column names and data types
+    column_names = ['Real_Distance_m', 'Time', 'Latitude', 'N/S', 'Longitude', 'E/W', 'Quality', 'Satellites', 'HDOP', 'Altitude', 'AltitudeVal', 'Geosep', 'GeosepVal', 'Age', 'Station']
+    data_types = {
+        'Real_Distance_m': int,
+        'Time': str,
+        'Latitude': str,
+        'N/S': str,
+        'Longitude': str,
+        'E/W': str,
+        'Quality': int,
+        'Satellites': int,
+        'HDOP': float,
+        'Altitude': str,
+        'AltitudeVal': str,
+        'Geosep': str,
+        'GeosepVal': str,
+        'Age': str,
+        'Station': str
+    }
+    dfs = []
+
+    for file in os.listdir(dir):
+        if not file.endswith(".ubx"):
+            continue
+        real_distance: str = file.split('-')[-1].split('.')[0]
+
+        df = pd.DataFrame(columns=column_names)
+
+        # first we need to filter for GNGAA messages
+        with open(os.path.join(dir, file), 'r', errors='replace') as f:
+            for line in f:
+                if not line.startswith("$GNGGA"):
+                    continue
+
+                            # Split the line into columns and insert the real distance
+                row = [real_distance] + line.strip().split(',')[1:]
+                # add row to pandas dataframe
+                df.loc[len(df)] = row
+
+            df = df.astype(data_types)
+            dfs.append(df)
+    return pd.concat(dfs, ignore_index=True)
+
+def convert_dms_to_dd(df: pd.DataFrame) -> float:
+    # convert the latitude and longitude from degrees, minutes, seconds to decimal degrees
+    # the latitude and longitude are in the format ddmm.mmmm
+
+    # convert the latitude
+    df['Latitude'] = df['Latitude'].apply(lambda x: int(x[:2]) + float(x[2:])/60)
+    # convert the longitude
+    df['Longitude'] = df['Longitude'].apply(lambda x: int(x[:3]) + float(x[3:])/60)
+
+def calculate_distance_with_gps(gps_data: pd.DataFrame) -> pd.DataFrame:
+    # take the average latitude and longitude of Real_Distance_m == 0
+    # and calculate the distance to the average latitude and longitude of the other distances
+    # the distance is in meters
+    start_lat = 51.029150 # gps_data[gps_data['Real_Distance_m'] == 0]['Average_Latitude'].iloc[0]
+    start_lon = 13.751346 # gps_data[gps_data['Real_Distance_m'] == 0]['Average_Longitude'].iloc[0]
+
+    print("The start latitude is: " + str(start_lat))
+    print("The start longitude is: " + str(start_lon))
+
+    # calculate the distance between the start and the average latitude and longitude
+    gps_data['Dist_calculated'] = gps_data.apply(lambda x: geopy.distance.distance((start_lat, start_lon), (x['Average_Latitude'], x['Average_Longitude'])).m, axis=1)
+
+    # now calculate the difference between the real distance and the calculated distance
+    gps_data['Dist_difference'] = gps_data['Dist_calculated'] - gps_data['Real_Distance_m']
+
+    # remove all rows where the real distance is 0
+    gps_data.drop(gps_data[gps_data['Real_Distance_m'] == 0].index, inplace=True)
+
+def calculate_average_lat_lon(gps_data: pd.DataFrame):
+    # group by the real distance
+    # calculate the average latitude and longitude
+
+    average_lat = gps_data.groupby('Real_Distance_m')['Latitude'].mean()
+    average_lon = gps_data.groupby('Real_Distance_m')['Longitude'].mean()
+
+    gps_data['Average_Latitude'] = gps_data['Real_Distance_m'].map(average_lat)
+    gps_data['Average_Longitude'] = gps_data['Real_Distance_m'].map(average_lon)
+
+def plot_distances_with_gps(ftm_data: pd.DataFrame, gps_data: pd.DataFrame):
+    # first print the distances in the df as a scatter plot
+    # plt.scatter(ftm_data['Dist_true_cm']/100, ftm_data['Dist_difference']/100, color = 'blue', alpha=0.1)
+    plt.scatter(ftm_data['Dist_true_cm']/100, ftm_data['Dist_difference_average']/100, color='red')
+    plt.xlabel('Real distance (m)')
+    plt.ylabel('Difference to real distance (m)')
+
+    # plt.scatter(df['Dist_true_cm']/100, df['Dist_difference_average'], color='red')
+    plt.xlim(0, min(gps_data['Real_Distance_m'].max(), (ftm_data['Dist_true_cm']/100).max()) + 1)
+
+
+    # print the distances in the gps data as a scatter plot
+    plt.scatter(gps_data['Real_Distance_m'], gps_data['Dist_difference'], color='green')
+
+    plt.legend(["Average FTM distance difference", "Average GPS distances differences"], ncol = 1 , loc = "upper left")
+
+    # draw a horizontal line at 0
+    plt.axhline(0, color='black', lw=1, linestyle='--')
+
+    plt.savefig(os.path.join(path_to_data, "graphs", "gps_distances.pdf"))
 
 def main():
     parser = argparse.ArgumentParser()
 
-    parser.add_dargument("plot_type", help="Choose between distance plots (d) or antenna plot (r)")
+    parser.add_argument("plot_type", help="Choose between distance plots (d), antenna plot (r), or distance with gps (dg)")
     parser.add_argument("dirname", help="Directory name for the data files")
 
     args = parser.parse_args()
@@ -318,6 +422,12 @@ def main():
             path_to_data = os.path.join(path_to_data, "different_distances")
     elif args.plot_type == "r":
             path_to_data = os.path.join(path_to_data, "different_angles_saddle")
+    elif args.plot_type == "dg":
+            path_to_data = os.path.join(path_to_data, "different_distances")
+    else:
+        print("Invalid plot type")
+        return
+
 
     path_to_data = os.path.join(path_to_data, args.dirname)
 
@@ -327,9 +437,6 @@ def main():
     average_distance_difference(df)
 
     if args.plot_type == "d":
-        if 'gps.pre' in os.listdir(path_to_data):
-            print("loading gps data")
-            df = load_gps_data(os.path.join(path_to_data, "gps.pre"), df)
 
         # prints the overall graph that compares distances
         plot_real_distance_vs_estimated_distance(df)
@@ -347,6 +454,12 @@ def main():
         rssi_calculations(df)
         plot_radial_graph_with_distances(df)
         plot_radial_graph_with_rssi(df)
+    elif args.plot_type == "dg":
+        gps_data = convert_ubx_to_data(os.path.join("gps", args.dirname))
+        convert_dms_to_dd(gps_data)
+        calculate_average_lat_lon(gps_data)
+        calculate_distance_with_gps(gps_data)
+        plot_distances_with_gps(df, gps_data)
 
 if __name__ == '__main__':
     main()

@@ -11,6 +11,7 @@ The header of data files is as follows:
 ID, Diag, RTT, T1, T2, T3, T4, RSSI, RTT_raw, RTT_est, Dist_est
 
 
+
 TODO:
 - ECDF
 - Sort by order/time
@@ -21,3 +22,6 @@ TODO:
 - other gps modes (Windows VM)
 - behind wall (unlikely, just once)
 - moving bicycle (no too important)
+- y-axis to meters
+- gps configuration updated
+- measurments next to house
