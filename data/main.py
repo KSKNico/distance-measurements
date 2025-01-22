@@ -415,9 +415,17 @@ def plot_distances_with_gps(ftm_data: pd.DataFrame, gps_data: pd.DataFrame):
     # draw a horizontal line at 0
     plt.axhline(0, color='black', lw=1, linestyle='--')
     plt.grid()
-    plt.show()
-
     plt.savefig(os.path.join(path_to_data, "graphs", "gps_distances.pdf"))
+    plt.close()
+
+def plot_number_of_satellites(gps_data: pd.DataFrame):
+    # plot the average number of satellites
+    plt.scatter(gps_data['Real_Distance_m'], gps_data['Satellites'], color='blue', alpha=0.1)
+    plt.xlabel('Real distance (m)')
+    plt.ylabel('Number of satellites')
+    plt.grid()
+    plt.savefig(os.path.join(path_to_data, "graphs", "satellites.pdf"))
+    plt.close()
 
 def main():
     parser = argparse.ArgumentParser()
@@ -471,6 +479,7 @@ def main():
         calculate_average_lat_lon(gps_data)
         calculate_distance_with_gps(gps_data)
         plot_distances_with_gps(df, gps_data)
+        plot_number_of_satellites(gps_data)
 
 if __name__ == '__main__':
     main()
