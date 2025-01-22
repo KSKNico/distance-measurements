@@ -346,6 +346,11 @@ def convert_ubx_to_data(dir) -> pd.DataFrame:
                 df.loc[len(df)] = row
 
             df = df.astype(data_types)
+            
+            # remove all rows where lat/long is empty
+            df = df[df['Latitude'] != '']
+            df = df[df['Longitude'] != '']
+
             dfs.append(df)
     return pd.concat(dfs, ignore_index=True)
 
@@ -358,18 +363,22 @@ def convert_dms_to_dd(df: pd.DataFrame) -> float:
     # convert the longitude
     df['Longitude'] = df['Longitude'].apply(lambda x: int(x[:3]) + float(x[3:])/60)
 
+mapping_of_dir_to_start_pos = {
+    "02": (51.029150, 13.751346),
+    "03": (51.02996886808531, 13.74926083421233),
+}
+
 def calculate_distance_with_gps(gps_data: pd.DataFrame) -> pd.DataFrame:
     # take the average latitude and longitude of Real_Distance_m == 0
     # and calculate the distance to the average latitude and longitude of the other distances
     # the distance is in meters
-    start_lat = 51.029150 # gps_data[gps_data['Real_Distance_m'] == 0]['Average_Latitude'].iloc[0]
-    start_lon = 13.751346 # gps_data[gps_data['Real_Distance_m'] == 0]['Average_Longitude'].iloc[0]
+    position = mapping_of_dir_to_start_pos[path_to_data.split('/')[-1]]
 
-    print("The start latitude is: " + str(start_lat))
-    print("The start longitude is: " + str(start_lon))
+    print("The start latitude is: " + str(position[0]))
+    print("The start longitude is: " + str(position[1]))
 
     # calculate the distance between the start and the average latitude and longitude
-    gps_data['Dist_calculated'] = gps_data.apply(lambda x: geopy.distance.distance((start_lat, start_lon), (x['Average_Latitude'], x['Average_Longitude'])).m, axis=1)
+    gps_data['Dist_calculated'] = gps_data.apply(lambda x: geopy.distance.distance(position, (x['Average_Latitude'], x['Average_Longitude'])).m, axis=1)
 
     # now calculate the difference between the real distance and the calculated distance
     gps_data['Dist_difference'] = gps_data['Dist_calculated'] - gps_data['Real_Distance_m']
@@ -405,6 +414,8 @@ def plot_distances_with_gps(ftm_data: pd.DataFrame, gps_data: pd.DataFrame):
 
     # draw a horizontal line at 0
     plt.axhline(0, color='black', lw=1, linestyle='--')
+    plt.grid()
+    plt.show()
 
     plt.savefig(os.path.join(path_to_data, "graphs", "gps_distances.pdf"))
 
