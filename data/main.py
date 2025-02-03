@@ -87,23 +87,25 @@ def load_multiple_files(file_names: list, plot_type: str):
 
 
 def plot_real_distance_vs_estimated_distance(data: pd.DataFrame):
+    # increase width of the plot
+    f = plt.figure()
+    f.set_figwidth(10)
+
     # plots the real distance vs the estimated distance
     plt.scatter(data['Dist_true_cm']/100, data['Dist_difference']/100, color = 'blue', alpha=0.1)
-    plt.xlabel('Real distance (m)')
-    plt.ylabel('Difference to real distance (m)')
+    plt.xlabel('Real distance [m]')
+    plt.ylabel('Difference to real distance [m]')
 
     plt.scatter(data['Dist_true_cm']/100, data['Dist_difference_average']/100, color='red')
     plt.scatter(data['Dist_true_cm']/100, data['Dist_difference_median']/100, color='yellow')
 
-    # x and y scaling should be the same
-    # plt.gca().set_aspect('equal', adjustable='box')
 
-    # plot the optimal line as well in red
-    # plt.plot([0, 3000], [0, 3000], 'r')
-
-    # plot horizontal line at 0
+    
+    plt.grid()
     plt.axhline(0, color='black', lw=1)
     plt.legend(["Distances differences" , "Average distance differences", "Median distance differences"], ncol = 1 , loc = "upper left")
+
+
 
     plt.savefig(os.path.join(path_to_data, "graphs", "real_vs_measured.pdf"))
     # plt.show()
@@ -115,7 +117,7 @@ def plot_individual_distance_measurement(data: pd.DataFrame):
     real_distance = data['Dist_true_cm'][0]//100
 
     plt.title(str(real_distance) + " m")
-    plt.xlabel('Measured distance (m)')
+    plt.xlabel('Measured distance [m]')
     plt.ylabel('Count in bucket')
 
     # increase bin size
@@ -126,6 +128,7 @@ def plot_individual_distance_measurement(data: pd.DataFrame):
     plt.axvline(x=data['Dist_calculated'].mean()/100, color='red', linestyle='--')
     plt.axvline(x=data['Dist_calculated'].median()/100, color='yellow', linestyle=':')
     plt.axvline(x=real_distance, color='blue')
+    plt.title("Bucket diagram for " + str(real_distance) + " m")
     plt.grid()
     
 
@@ -142,6 +145,7 @@ def plot_ecdf_distance_measurement(df):
 
     plt.xlabel("Distance [m]")
     plt.ylabel("Distribution of values")
+    plt.grid()
 
     plt.savefig(os.path.join(path_to_data, "graphs", "ecdf_" + str(real_distance) + "m.pdf"))
     plt.close()
@@ -155,6 +159,8 @@ def plot_time_graph(df: pd.DataFrame):
     plt.title("Time diagram for " + str(real_distance) + " m")
     plt.xlabel("Time of the measurement (T1) [seconds]")
     plt.ylabel("Distance [m]")
+    plt.grid()
+    
     plt.savefig(os.path.join(path_to_data, "graphs", "time_" + str(real_distance) + "m.pdf"))
     plt.close()
 
@@ -191,7 +197,7 @@ def rssi_calculations(df: pd.DataFrame):
     df['RSSI_median'] = df['Angle'].map(median_rssi_df)
 
 def plot_radial_graph_with_distances(df: pd.DataFrame):
-    real_distance: int = df['Dist_true_cm'].iloc[0]
+    real_distance: int = df['Dist_true_cm'].iloc[0]//100
     # reduced_df = df.drop_duplicates('Angle').copy()
 
     print(df[df['Angle'] == 270]['RSSI'])
@@ -205,28 +211,47 @@ def plot_radial_graph_with_distances(df: pd.DataFrame):
     # increase the size of the plot
     fig.set_size_inches(10, 10)
     
-    # Achseneinteilung auf 0 in die Mitte
+    # 0 should be in the middle
     # limit the radius
-    ax.set_ylim(0, 1000)
+    ax.set_ylim(0, 10)
 
     # draw a circle with the real distance
     angles = np.linspace(0, 2*np.pi, 100)
     radii = np.full(100, real_distance)
+
+    # set ticks every 1 meter
+    ax.set_yticks(range(0, 11, 1))
 
     ax.plot(angles, radii, color='green', linestyle='--')
 
     # make 0 degrees at the top
     ax.set_theta_offset(np.pi/2)    
 
-    ax.scatter(df['Angle_radians'], df['Dist_calculated'], c='blue', label="Measured distance", alpha=0.1)
-    ax.scatter(df['Angle_radians'], df['Dist_average'], c='red', label="Average")
-    ax.scatter(df['Angle_radians'], df['Dist_median'], c='yellow', label="Median")
+    # enable grid
+    ax.grid(True)
+
+    # grid lines every 30 degrees
+    ax.set_thetagrids(range(0, 360, 30))
+
+
+    ax.set_ylabel('Distance [m]')
+    ax.yaxis.set_label_coords(0.3, 1)
+    ax.yaxis.label.set_rotation(0)
+
+
+
+    ax.scatter(df['Angle_radians'], df['Dist_calculated']/100, c='blue', label="Measured distance", alpha=0.1)
+    ax.scatter(df['Angle_radians'], df['Dist_average']/100, c='red', label="Average")
+    # ax.scatter(df['Angle_radians'], df['Dist_median']/100, c='yellow', label="Median")
 
     # add meter suffix to the radius
     # ax.set_yticklabels([str(i) + " m" for i in range(0, 11, 1)])
 
     plt.legend(["Real Distance", "Distances" , "Average distance", "Median distance"], ncol = 1 , loc = "upper left")
-    plt.title("Measured distances for " + str(real_distance/100) + " m")
+    # plt.title("Measured distances for " + str(real_distance) + " m")
+
+    # move it further away from the plot
+    ax.legend(bbox_to_anchor=(0.15, 1))
 
     # the image should be in the middle of the radial plot
     image_xaxis = 0.465
@@ -240,7 +265,7 @@ def plot_radial_graph_with_distances(df: pd.DataFrame):
     ax_image.imshow(image)
     ax_image.axis('off') 
 
-    fig.savefig(os.path.join(path_to_data, "graphs", "radial_" + str(real_distance) + "cm.pdf"))
+    fig.savefig(os.path.join(path_to_data, "graphs", "radial_" + str(real_distance) + "m.pdf"))
     plt.close()
 
 
@@ -255,6 +280,15 @@ def plot_radial_graph_with_rssi(df: pd.DataFrame):
 
     # label the radius as RSSI
     ax.set_ylabel('RSSI')
+
+    # move label
+    ax.yaxis.set_label_coords(0.3, 1)
+    
+    # rotate label 90 degrees
+    ax.yaxis.label.set_rotation(0)
+
+    # grid lines every 30 degrees
+    ax.set_thetagrids(range(0, 360, 30))
      
 
     # increase the size of the plot
@@ -266,15 +300,16 @@ def plot_radial_graph_with_rssi(df: pd.DataFrame):
 
     ax.scatter(df['Angle_radians'], df['RSSI'], c='blue', label="Measured RSSI", alpha=0.1)
     ax.scatter(df['Angle_radians'], df['RSSI_average'], c='red', label="Average RSSI")
-    ax.scatter(df['Angle_radians'], df['RSSI_median'], c='yellow', label="Median RSSI")
+    # ax.scatter(df['Angle_radians'], df['RSSI_median'], c='yellow', label="Median RSSI")
 
     # plot a line that goes through all median values
     # ax.plot(df['Angle_radians'], df['RSSI_median'], c='yellow', linestyle='--')
 
     plt.legend(["RSSI" , "Average RSSI", "Median RSSI"], ncol = 1 , loc = "upper left")
-    plt.title("RSSI values for " + str(real_distance//100) + " m")
+    # plt.title("RSSI values for " + str(real_distance//100) + " m")
 
     # the image should be in the middle of the radial plot
+    # this is hacky, but it works
     image_xaxis = 0.465
     image_yaxis = 0.465
     image = open_image_local(BICYCLE_IMAGE_NAME)
@@ -400,8 +435,8 @@ def plot_distances_with_gps(ftm_data: pd.DataFrame, gps_data: pd.DataFrame):
     # first print the distances in the df as a scatter plot
     # plt.scatter(ftm_data['Dist_true_cm']/100, ftm_data['Dist_difference']/100, color = 'blue', alpha=0.1)
     plt.scatter(ftm_data['Dist_true_cm']/100, ftm_data['Dist_difference_average']/100, color='red')
-    plt.xlabel('Real distance (m)')
-    plt.ylabel('Difference to real distance (m)')
+    plt.xlabel('Real distance [m]')
+    plt.ylabel('Difference to real distance [m]')
 
     # plt.scatter(df['Dist_true_cm']/100, df['Dist_difference_average'], color='red')
     plt.xlim(0, min(gps_data['Real_Distance_m'].max(), (ftm_data['Dist_true_cm']/100).max()) + 1)
@@ -410,7 +445,7 @@ def plot_distances_with_gps(ftm_data: pd.DataFrame, gps_data: pd.DataFrame):
     # print the distances in the gps data as a scatter plot
     plt.scatter(gps_data['Real_Distance_m'], gps_data['Dist_difference'], color='green')
 
-    plt.legend(["Average FTM distance difference", "Average GPS distances differences"], ncol = 1 , loc = "upper left")
+    plt.legend(["Average FTM distance difference", "Average GPS distance difference"], ncol = 1 , loc = "upper left")
 
     # draw a horizontal line at 0
     plt.axhline(0, color='black', lw=1, linestyle='--')
@@ -421,7 +456,7 @@ def plot_distances_with_gps(ftm_data: pd.DataFrame, gps_data: pd.DataFrame):
 def plot_number_of_satellites(gps_data: pd.DataFrame):
     # plot the average number of satellites
     plt.scatter(gps_data['Real_Distance_m'], gps_data['Satellites'], color='blue', alpha=0.1)
-    plt.xlabel('Real distance (m)')
+    plt.xlabel('Real distance [m]')
     plt.ylabel('Number of satellites')
     plt.grid()
     plt.savefig(os.path.join(path_to_data, "graphs", "satellites.pdf"))
