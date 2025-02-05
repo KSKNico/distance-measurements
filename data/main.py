@@ -98,17 +98,31 @@ def plot_real_distance_vs_estimated_distance(data: pd.DataFrame):
 
     plt.scatter(data['Dist_true_cm']/100, data['Dist_difference_average']/100, color='red')
     plt.scatter(data['Dist_true_cm']/100, data['Dist_difference_median']/100, color='yellow')
-
-
-    
+  
     plt.grid()
-    plt.axhline(0, color='black', lw=1)
+    plt.axhline(0, color='black', lw=1, linestyle='--')
     plt.legend(["Distances differences" , "Average distance differences", "Median distance differences"], ncol = 1 , loc = "upper left")
-
-
 
     plt.savefig(os.path.join(path_to_data, "graphs", "real_vs_measured.pdf"))
     # plt.show()
+    plt.close()
+
+def plot_real_distance_vs_estimated_distance_relative(data: pd.DataFrame):
+    # increase width of the plot
+    f = plt.figure()
+    f.set_figwidth(10)
+
+    # plots the real distance vs the estimated distance
+    plt.scatter(data['Dist_true_cm']/100, abs(data['Dist_difference_average']/100) / (data['Dist_true_cm']/100) * 100, color = 'blue')
+    plt.xlabel('Real distance [m]')
+    plt.ylabel('Relative error [%]')
+  
+    plt.grid()
+    plt.legend(["FTM measurments"], ncol = 1 , loc = "upper right")
+
+    plt.axhline(0, color='black', lw=1, linestyle='--')
+    plt.savefig(os.path.join(path_to_data, "graphs", "real_vs_measured_relative.pdf"))
+    plt.show()
     plt.close()
 
 def plot_individual_distance_measurement(data: pd.DataFrame):
@@ -126,10 +140,12 @@ def plot_individual_distance_measurement(data: pd.DataFrame):
     maximum_distance = data['Dist_calculated'].max()//100
     width = maximum_distance - minimum_distance 
     plt.axvline(x=data['Dist_calculated'].mean()/100, color='red', linestyle='--')
-    plt.axvline(x=data['Dist_calculated'].median()/100, color='yellow', linestyle=':')
-    plt.axvline(x=real_distance, color='blue')
+    # plt.axvline(x=data['Dist_calculated'].median()/100, color='yellow', linestyle=':')
+    plt.axvline(x=real_distance, color='green', linestyle='--')
     plt.title("Bucket diagram for " + str(real_distance) + " m")
     plt.grid()
+
+    plt.legend(["Mean", "Real distance"], ncol = 1 , loc = "upper right")
     
 
     plt.hist(data['Dist_calculated']/100, bins=range(minimum_distance, maximum_distance + 1, 1), color='lightblue', edgecolor='black')
@@ -141,7 +157,7 @@ def plot_ecdf_distance_measurement(df):
     plt.ecdf(x=df['Dist_calculated']/100)
 
     plt.title("ECDF Graph for " + str(real_distance) + " m")
-    plt.axvline(real_distance, color="red", linestyle="-")
+    plt.axvline(real_distance, color="green", linestyle="--")
 
     plt.xlabel("Distance [m]")
     plt.ylabel("Distribution of values")
@@ -171,6 +187,12 @@ def add_distance_with_rtt(df: pd.DataFrame):
     df['Dist_calculated'] = df['RTT'].apply(func=calculate_distance_with_rtt)
     df['Dist_difference'] = df['Dist_calculated'] - df['Dist_true_cm'] 
 
+def rssi_calculations_for_distances(df: pd.DataFrame):
+    rssi_average = df.groupby('Dist_true_cm')['RSSI'].mean()
+
+    # map to the original dataframe
+    df['RSSI_average'] = df['Dist_true_cm'].map(rssi_average)
+
 def average_distance_difference(data: pd.DataFrame):
     # group by real distance
     # calculate the mean of the difference
@@ -187,7 +209,7 @@ def average_distance_difference(data: pd.DataFrame):
         data['Dist_average'] = data['Angle'].map(average_df)
         data['Dist_median'] = data['Angle'].map(median_df)
 
-def rssi_calculations(df: pd.DataFrame):
+def rssi_calculations_for_angles(df: pd.DataFrame):
     # group by angle and calculate the average RSSI
     average_rssi_df = df.groupby('Angle')['RSSI'].mean()
     median_rssi_df = df.groupby('Angle')['RSSI'].median()
@@ -241,13 +263,13 @@ def plot_radial_graph_with_distances(df: pd.DataFrame):
 
 
     ax.scatter(df['Angle_radians'], df['Dist_calculated']/100, c='blue', label="Measured distance", alpha=0.1)
-    ax.scatter(df['Angle_radians'], df['Dist_average']/100, c='red', label="Average")
+    ax.scatter(df['Angle_radians'], df['Dist_average']/100, c='red', label="Average distance")
     # ax.scatter(df['Angle_radians'], df['Dist_median']/100, c='yellow', label="Median")
 
     # add meter suffix to the radius
     # ax.set_yticklabels([str(i) + " m" for i in range(0, 11, 1)])
 
-    plt.legend(["Real Distance", "Distances" , "Average distance", "Median distance"], ncol = 1 , loc = "upper left")
+    plt.legend(["Real distance", "Distances" , "Average distance", "Median distance"], ncol = 1 , loc = "upper left")
     # plt.title("Measured distances for " + str(real_distance) + " m")
 
     # move it further away from the plot
@@ -268,6 +290,20 @@ def plot_radial_graph_with_distances(df: pd.DataFrame):
     fig.savefig(os.path.join(path_to_data, "graphs", "radial_" + str(real_distance) + "m.pdf"))
     plt.close()
 
+def plot_distance_with_rssi(df: pd.DataFrame):
+
+    # plot the distance vs the RSSI
+    plt.scatter((df['Dist_true_cm']//100).unique(), df['RSSI_average'].unique(), c='blue')
+
+    plt.legend(["Average RSSI"], ncol = 1 , loc = "upper right")
+
+    plt.xlabel('Real distance [m]')
+    plt.ylabel('RSSI')
+
+    plt.grid()
+    plt.savefig(os.path.join(path_to_data, "graphs", "rssi.pdf"))
+
+    plt.close()
 
 def plot_radial_graph_with_rssi(df: pd.DataFrame):
     real_distance: int = df['Dist_true_cm'].iloc[0]
@@ -323,19 +359,6 @@ def plot_radial_graph_with_rssi(df: pd.DataFrame):
 
     fig.savefig(os.path.join(path_to_data, "graphs", "radial_rssi.pdf"))
     plt.close()
-
-"""
-def load_gps_data(file_path: str, df: pd.DataFrame) -> pd.DataFrame:
-    # the gps data is a csv file with two columns
-    # first column is the real distance in meters, second column is the measured distance in meters
-    gps_data = pd.read_csv(file_path, names=['Dist_true_cm', 'GPS_distance'])
-    gps_data['GPS_distance_difference'] = gps_data['Dist_true_cm'] - gps_data['GPS_distance']
-    # merge the gps data with the existing data
-    df = pd.merge(df, gps_data, on='Dist_true_cm', how='left')
-    print(df.columns)
-    print(df.head())
-    return df
-"""
 
 # this only looks at GNGGA messages
 def convert_ubx_to_data(dir) -> pd.DataFrame:
@@ -432,6 +455,8 @@ def calculate_average_lat_lon(gps_data: pd.DataFrame):
     gps_data['Average_Longitude'] = gps_data['Real_Distance_m'].map(average_lon)
 
 def plot_distances_with_gps(ftm_data: pd.DataFrame, gps_data: pd.DataFrame):
+    f = plt.figure()
+    f.set_figwidth(10)
     # first print the distances in the df as a scatter plot
     # plt.scatter(ftm_data['Dist_true_cm']/100, ftm_data['Dist_difference']/100, color = 'blue', alpha=0.1)
     plt.scatter(ftm_data['Dist_true_cm']/100, ftm_data['Dist_difference_average']/100, color='red')
@@ -453,13 +478,74 @@ def plot_distances_with_gps(ftm_data: pd.DataFrame, gps_data: pd.DataFrame):
     plt.savefig(os.path.join(path_to_data, "graphs", "gps_distances.pdf"))
     plt.close()
 
+def plot_distances_with_gps_relative(ftm_data: pd.DataFrame, gps_data: pd.DataFrame):
+    f = plt.figure()
+    f.set_figwidth(10)
+
+    # first calculate the relative error
+    ftm_data['ftm_relative_error'] = abs(ftm_data['Dist_difference_average']) / ftm_data['Dist_true_cm'] * 100
+    gps_data['gps_relative_error'] = abs(gps_data['Dist_difference']) / gps_data['Real_Distance_m'] * 100
+
+    # plot the relative error
+    plt.scatter(ftm_data['Dist_true_cm']/100, ftm_data['ftm_relative_error'], color='red')
+    plt.scatter(gps_data['Real_Distance_m'], gps_data['gps_relative_error'], color='green')
+
+    plt.xlabel('Real distance [m]')
+    plt.ylabel('Relative error [%]')
+
+    plt.legend(["FTM relative error", "GPS relative error"], ncol = 1 , loc = "upper right")
+
+    plt.axhline(0, color='black', lw=1, linestyle='--')
+    plt.grid()
+    plt.savefig(os.path.join(path_to_data, "graphs", "gps_relative_error.pdf"))
+    plt.close()
+
+
 def plot_number_of_satellites(gps_data: pd.DataFrame):
     # plot the average number of satellites
-    plt.scatter(gps_data['Real_Distance_m'], gps_data['Satellites'], color='blue', alpha=0.1)
+    plt.scatter(gps_data['Real_Distance_m'], gps_data['Satellites'].astype(int), color='blue', alpha=0.1)
     plt.xlabel('Real distance [m]')
     plt.ylabel('Number of satellites')
+
+
+    plt.legend(["GPS measurements"], ncol = 1 , loc = "upper right")
+
+    # show ticks only at full numbers
+    plt.yticks(range(4, 12, 1))
     plt.grid()
     plt.savefig(os.path.join(path_to_data, "graphs", "satellites.pdf"))
+    plt.close()
+
+def plot_comparison_clear_obstacle_rssi(df1: pd.DataFrame, df2: pd.DataFrame):
+    # plot the RSSI values of the two dataframes against each other
+    plt.scatter(df1['Dist_true_cm']//100, df1['RSSI_average'], color='blue', alpha=1)
+    plt.scatter(df2['Dist_true_cm']//100, df2['RSSI_average'], color='red', alpha=1)
+    plt.xlabel('Real distance [m]')
+    plt.ylabel('RSSI')
+
+    plt.xlim(0, min(df1['Dist_true_cm'].max(), df2['Dist_true_cm'].max())//100 + 1)
+
+    plt.legend(["RSSI with no structures nearby", "RSSI next to building"], ncol = 1 , loc = "upper right")
+
+
+
+    plt.grid()
+    plt.savefig(os.path.join(path_to_data, "graphs", "rssi_comparison.pdf"))
+    plt.close()
+
+def plot_comparison_clear_obstacle_distance(df1: pd.DataFrame, df2: pd.DataFrame):
+    # plot the distances of the two dataframes against each other
+    plt.scatter(df1['Dist_true_cm']//100, df1['Dist_difference_average']//100, color='blue', alpha=1)
+    plt.scatter(df2['Dist_true_cm']//100, df2['Dist_difference_average']//100, color='red', alpha=1)
+    plt.xlabel('Real distance [m]')
+    plt.ylabel('Difference to real distance [m]')
+
+    plt.xlim(0, min(df1['Dist_true_cm'].max(), df2['Dist_true_cm'].max())//100 + 1)
+
+    plt.legend(["Distance with no structures nearby", "Distance next to building"], ncol = 1 , loc = "upper right")
+
+    plt.grid()
+    plt.savefig(os.path.join(path_to_data, "graphs", "distance_comparison_clear_obstacle.pdf"))
     plt.close()
 
 def main():
@@ -478,6 +564,8 @@ def main():
             path_to_data = os.path.join(path_to_data, "different_angles_saddle")
     elif args.plot_type == "dg":
             path_to_data = os.path.join(path_to_data, "different_distances")
+    elif args.plot_type == "c":
+            pass
     else:
         print("Invalid plot type")
         return
@@ -485,15 +573,18 @@ def main():
 
     path_to_data = os.path.join(path_to_data, args.dirname)
 
-
-    df = load_multiple_files(get_data_file_names('.out'), args.plot_type)
-    add_distance_with_rtt(df)
-    average_distance_difference(df)
+    if args.plot_type != "c":
+        df = load_multiple_files(get_data_file_names('.out'), args.plot_type)
+        add_distance_with_rtt(df)
+        average_distance_difference(df)
 
     if args.plot_type == "d":
+        rssi_calculations_for_distances(df)
+        plot_distance_with_rssi(df)
 
         # prints the overall graph that compares distances
         plot_real_distance_vs_estimated_distance(df)
+        plot_real_distance_vs_estimated_distance_relative(df)
 
         # prints the indivdiual distances as a histogram
         # go over each real distance
@@ -505,7 +596,7 @@ def main():
             plot_ecdf_distance_measurement(subset)
             plot_time_graph(subset)
     elif args.plot_type == "r":
-        rssi_calculations(df)
+        rssi_calculations_for_angles(df)
         plot_radial_graph_with_distances(df)
         plot_radial_graph_with_rssi(df)
     elif args.plot_type == "dg":
@@ -514,7 +605,27 @@ def main():
         calculate_average_lat_lon(gps_data)
         calculate_distance_with_gps(gps_data)
         plot_distances_with_gps(df, gps_data)
+        plot_distances_with_gps_relative(df, gps_data)
         plot_number_of_satellites(gps_data)
+
+    # this is only for comparison of clear and obstacle data (02/ and 03/ respectively)
+    # this is hard coded!
+    if args.plot_type == "c":
+        path_to_data = "different_distances/02"
+        df_clear = load_multiple_files(get_data_file_names('.out'), 'd')
+        add_distance_with_rtt(df_clear)
+        average_distance_difference(df_clear)
+        rssi_calculations_for_distances(df_clear)
+
+
+        path_to_data = "different_distances/03"
+        df_obstacles = load_multiple_files(get_data_file_names('.out'), 'd')
+        add_distance_with_rtt(df_obstacles)
+        average_distance_difference(df_obstacles)
+        rssi_calculations_for_distances(df_obstacles)
+
+        plot_comparison_clear_obstacle_rssi(df_clear, df_obstacles)
+        plot_comparison_clear_obstacle_distance(df_clear, df_obstacles)
 
 if __name__ == '__main__':
     main()
