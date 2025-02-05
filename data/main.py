@@ -542,7 +542,7 @@ def plot_comparison_clear_obstacle_distance(df1: pd.DataFrame, df2: pd.DataFrame
 
     plt.xlim(0, min(df1['Dist_true_cm'].max(), df2['Dist_true_cm'].max())//100 + 1)
 
-    plt.legend(["Distance with no structures nearby", "Distance next to building"], ncol = 1 , loc = "upper right")
+    plt.legend(["FTM with no structures nearby", "FTM next to building"], ncol = 1 , loc = "upper right")
 
     plt.grid()
     plt.savefig(os.path.join(path_to_data, "graphs", "distance_comparison_clear_obstacle.pdf"))
